@@ -6,6 +6,10 @@ using System.Reflection.PortableExecutable;
 using System;
 using System.IO;
 using System.Text;
+using MediaToolkit.Model;
+using MediaToolkit;
+using MediaToolkit.Options;
+using static MediaToolkit.Model.Metadata;
 
 namespace CancerPredictionApi.Controllers
 {
@@ -20,55 +24,84 @@ namespace CancerPredictionApi.Controllers
             return Ok("active");
         }
         [HttpPost("/UploadVid")]
-        public async Task<IActionResult> UploadVid(IFormFile file)
+        public async Task<IActionResult> UploadVid(IFormFile data, int starttime, int endtime)
         {
-            var filePath = "D:/down/TEMP.mp4";
+            string currentdt = DateTime.Now.ToString("ddMMyyyyhhmmss");
+            var filePath = "D:/down/Raw-"+ currentdt +".mp4";
             using (var stream = System.IO.File.Create(filePath))
             {
-                await file.CopyToAsync(stream);
+                await data.CopyToAsync(stream);
             }
-            //Console.WriteLine("starttime:", temp.starttime);
-            //Console.WriteLine("endtime:",temp.endtime);
+            string outname= stripvid(filePath, starttime, endtime, currentdt);
             ServiceResponse<string> response = new ServiceResponse<string>();
             response.Success = true;
             response.Message = "success";
-            response.Data = "Temp";
+            response.Data = outname;
             return Ok(response);
 
         }
-        [HttpPost("/Strip")]
-        public async Task<IActionResult> Strip(strip st)
-        {
-            Console.WriteLine("start time", st.starttime);
-            Console.WriteLine("end time", st.endtime);
-            return Ok();
-        }
-        [HttpGet("/download")]
-        public async Task<IActionResult> download()
-        {
-            var filePath = "D:/down/TEMP.mp4";
-            //var provider = new FileExtensionContentTypeProvider();
-            //if (!provider.TryGetContentType(filePath, out var contentType))
-            //{
-            //    contentType = "application/octet-stream";
-            //}
+        //[HttpPost("/Strip")]
+        //public async Task<IActionResult> Strip(strip st)
+        //{
+        //    Console.WriteLine("start time", st.starttime);
+        //    Console.WriteLine("end time", st.endtime);
+        //    return Ok();
+        //}
 
+
+        [HttpGet("/stream")]
+        public async Task<IActionResult> stream([FromQuery]string filename)
+        {
+            string filePath = "D:/down/" + filename+".mp4";
             var bytes = await System.IO.File.ReadAllBytesAsync(filePath);
             return File(bytes, "video/mp4", Path.GetFileName(filePath));
         }
-        [HttpGet("/dummy")]
-        public async Task<IActionResult> dummy()
+        //[HttpGet("/dummy")]
+        //public async Task<IActionResult> dummy()
+        //{
+        //    string str = detect_cancer(12, 15, 25, 55, @"C:\Users\Gideon\Downloads\TEMP.mp4");
+        //    return Ok(str);
+        //    //return Ok();
+        //}
+
+        private string stripvid(string input, int starttime, int endtime, string currentdt)
         {
-            string str = detect_cancer(12, 15, 25, 55, @"C:\Users\Gideon\Downloads\TEMP.mp4");
-            return Ok(str);
-            //return Ok();
+            string outname = "Stripped-" + currentdt ;
+            string path = "D:/down/" ;
+            string outpath = path + outname + ".mp4";
+            var inputfile =  new MediaFile { Filename = input };
+            var outputfile = new MediaFile { Filename = outpath };
+            try
+            {
+                using (var engine = new Engine(@"C:\Users\Gideon\source\repos\CancerPredictionApi\CancerPredictionApi\ffmpeg\bin\ffmpeg.exe"))
+                {
+                    engine.GetMetadata(inputfile);
+                    var options = new ConversionOptions();
+
+                    // This example will create a 25 second video, starting from the 
+                    // 30th second of the original video.
+                    // First parameter requests the starting frame to cut the media from.
+                    // Second parameter requests how long to cut the video.
+                    options.CutMedia(TimeSpan.FromSeconds(starttime), TimeSpan.FromSeconds(endtime - starttime + 1));
+                    engine.Convert(inputfile, outputfile, options);
+                    return outname;
+
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex.Message);
+                return ex.Message;
+            }
+           
         }
-        public string detect_cancer(int rsme, int iniw, int finalw, int gain, string loc)
+        private string detect_cancer(int rsme, int iniw, int finalw, int gain, string filename)
         {
             string lastline;
+            string location = "D:/down/" + filename + ".mp4";
             ProcessStartInfo start = new ProcessStartInfo();
             start.FileName = @"D:\conda\python.exe";
-            //start.Arguments = @"D:\App\App.py " + loc + " " + rsme + " " + iniw + " " + finalw + " " + gain;
+            //start.Arguments = @"D:\App\App.py " + location + " " + rsme + " " + iniw + " " + finalw + " " + gain;
             start.Arguments = @"D:\App\App.py";
             start.UseShellExecute = false;
             start.RedirectStandardOutput = true;
