@@ -24,6 +24,7 @@ namespace CancerPredictionApi.Controllers
             return Ok("active");
         }
         [HttpPost("/UploadVid")]
+        [RequestFormLimits(MultipartBodyLengthLimit = 2147483648)]
         public async Task<IActionResult> UploadVid(IFormFile data, int starttime, int endtime)
         {
             string currentdt = DateTime.Now.ToString("ddMMyyyyhhmmss");
@@ -56,6 +57,7 @@ namespace CancerPredictionApi.Controllers
             var bytes = await System.IO.File.ReadAllBytesAsync(filePath);
             return File(bytes, "video/mp4", Path.GetFileName(filePath));
         }
+
         //[HttpGet("/dummy")]
         //public async Task<IActionResult> dummy()
         //{
@@ -63,6 +65,43 @@ namespace CancerPredictionApi.Controllers
         //    return Ok(str);
         //    //return Ok();
         //}
+
+        [HttpPost("/predict")]
+        public async Task<IActionResult> predict([FromBody] Param param)
+        {
+            ServiceResponse<string> response = new ServiceResponse<string>();
+            response.Success = false;
+            response.Message = "Issue in backend";
+            response.Data = null;
+
+            if (param != null)
+            {
+                try
+                {
+                    string outpath=detect_cancer(param);
+                    if (outpath is null)
+                    {
+                        return BadRequest(response);
+                    }
+                    response.Success = true;
+                    response.Message = "success";
+                    response.Data = outpath;
+                    return Ok(response);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine(ex.ToString());
+
+                    response.Data = ex.ToString();
+                    return BadRequest(response);
+                }
+            }
+            else
+            {
+                response.Message = "Please provide all the details!";
+                return BadRequest(response);
+            }
+        }
 
         private string stripvid(string input, int starttime, int endtime, string currentdt)
         {
@@ -95,23 +134,23 @@ namespace CancerPredictionApi.Controllers
             }
            
         }
-        private string detect_cancer(int rsme, int iniw, int finalw, int gain, string filename)
+        private string detect_cancer(Param param)
         {
             string lastline;
-            string location = "D:/down/" + filename + ".mp4";
+            string location = "D:/down/" + param.fileName + ".mp4";
             ProcessStartInfo start = new ProcessStartInfo();
             start.FileName = @"D:\conda\python.exe";
-            //start.Arguments = @"D:\App\App.py " + location + " " + rsme + " " + iniw + " " + finalw + " " + gain;
-            start.Arguments = @"D:\App\App.py";
+            start.Arguments = @"D:\App\App.py " + location + " " + param.rsme + " " + param.iniw + " " + param.finalw + " " + param.gain;
+            //start.Arguments = @"D:\App\App.py";
             start.UseShellExecute = false;
             start.RedirectStandardOutput = true;
-            using (Process process = Process.Start(start))
+            using (System.Diagnostics.Process process = System.Diagnostics.Process.Start(start))
             {
                 using (StreamReader reader = process.StandardOutput)
                 {
                     string result = reader.ReadToEnd();
                     Console.WriteLine(result);
-                    string path = @"D:\" + DateTime.Now.ToString("ddMMyyyyhhmmss") + ".txt";
+                    string path = @"D:\down\logs\" + DateTime.Now.ToString("ddMMyyyyhhmmss") + ".txt";
                     using (StreamWriter sw = System.IO.File.CreateText(path)) ;
                     System.IO.File.WriteAllText(path, result);
                     lastline = System.IO.File.ReadLines(path).Last();
