@@ -10,6 +10,7 @@ using MediaToolkit.Model;
 using MediaToolkit;
 using MediaToolkit.Options;
 using static MediaToolkit.Model.Metadata;
+using Microsoft.Extensions.Configuration;
 
 namespace CancerPredictionApi.Controllers
 {
@@ -18,17 +19,41 @@ namespace CancerPredictionApi.Controllers
     public class HomeController : Controller
     {
 
+        private string _rawFileAddress = "rawAddress";
+        private string _downloadFolder = "downloadLoc";
+        private string _ffmpegLocation = "ffmpegLoc";
+        private string _condaLoc = "condaLoc";
+        private string _pythonExeLoc = "pythonExeLoc";
+        private string _pythonLogsLoc = "pythonLogsLoc";
+
+        public HomeController()
+        {
+            GetSetting(ref _rawFileAddress);
+            GetSetting(ref _downloadFolder);
+            GetSetting(ref _ffmpegLocation);
+            GetSetting(ref _condaLoc);
+            GetSetting(ref _pythonExeLoc);
+            GetSetting(ref _pythonLogsLoc);
+        }
+
         [HttpGet("/status")]
         public async Task<IActionResult> status()
         {
             return Ok("active");
         }
+
+        private void GetSetting(ref string variable)
+        {
+            variable = new ConfigurationBuilder().AddJsonFile("appsettings.json").Build().GetSection("AppSettings")[variable];
+        }
+
         [HttpPost("/UploadVid")]
         [RequestFormLimits(MultipartBodyLengthLimit = 2147483648)]
         public async Task<IActionResult> UploadVid(IFormFile data, int starttime, int endtime)
         {
             string currentdt = DateTime.Now.ToString("ddMMyyyyhhmmss");
-            var filePath = "D:/down/Raw-"+ currentdt +".mp4";
+            //var filePath = "D:/down/Raw-"+ currentdt +".mp4";
+            var filePath = _rawFileAddress + currentdt + ".mp4";
             using (var stream = System.IO.File.Create(filePath))
             {
                 await data.CopyToAsync(stream);
@@ -53,6 +78,10 @@ namespace CancerPredictionApi.Controllers
         [HttpGet("/stream")]
         public async Task<IActionResult> stream([FromQuery]string filename)
         {
+
+            //string filePath = "D:/down/" + filename+".mp4";
+            string filePath = _downloadFolder + filename + ".mp4";
+
             string filePath;
             if(filename == null)
             {
@@ -119,13 +148,15 @@ namespace CancerPredictionApi.Controllers
         private string stripvid(string input, int starttime, int endtime, string currentdt)
         {
             string outname = "Stripped-" + currentdt ;
-            string path = "D:/down/" ;
+            string path = _downloadFolder;
+                //"D:/down/" ;
             string outpath = path + outname + ".mp4";
             var inputfile =  new MediaFile { Filename = input };
             var outputfile = new MediaFile { Filename = outpath };
             try
             {
-                using (var engine = new Engine(@"C:\Users\Gideon\source\repos\CancerPredictionApi\CancerPredictionApi\ffmpeg\bin\ffmpeg.exe"))
+                //using (var engine = new Engine(@"C:\Users\Gideon\source\repos\CancerPredictionApi\CancerPredictionApi\ffmpeg\bin\ffmpeg.exe"))
+                using (var engine = new Engine(_ffmpegLocation))
                 {
                     engine.GetMetadata(inputfile);
                     var options = new ConversionOptions();
@@ -152,8 +183,11 @@ namespace CancerPredictionApi.Controllers
             string lastline;
             string location = "D:/down/" + param.fileName + ".mp4";
             ProcessStartInfo start = new ProcessStartInfo();
-            start.FileName = @"D:\conda\python.exe";
-            start.Arguments = @"D:\App\App.py " + location + " " + param.rsme + " " + param.iniw + " " + param.finalw + " " + param.gain;
+            //start.FileName = @"D:\conda\python.exe";
+            //start.Arguments = @"D:\App\App.py " + location + " " + param.rsme + " " + param.iniw + " " + param.finalw + " " + param.gain;
+            start.FileName = _condaLoc ;
+            start.Arguments = _pythonExeLoc + location + " " + param.rsme + " " + param.iniw + " " + param.finalw + " " + param.gain;
+
             //start.Arguments = @"D:\App\App.py";
             start.UseShellExecute = false;
             start.RedirectStandardOutput = true;
@@ -163,7 +197,8 @@ namespace CancerPredictionApi.Controllers
                 {
                     string result = reader.ReadToEnd();
                     Console.WriteLine(result);
-                    string path = @"D:\down\logs\" + DateTime.Now.ToString("ddMMyyyyhhmmss") + ".txt";
+                    //string path = @"D:\down\logs\" + DateTime.Now.ToString("ddMMyyyyhhmmss") + ".txt";
+                    string path = _pythonLogsLoc + DateTime.Now.ToString("ddMMyyyyhhmmss") + ".txt";
                     using (StreamWriter sw = System.IO.File.CreateText(path)) ;
                     System.IO.File.WriteAllText(path, result);
                     lastline = System.IO.File.ReadLines(path).Last();
@@ -172,6 +207,9 @@ namespace CancerPredictionApi.Controllers
             }
             return lastline;
         }
+
+
+       
 
     }
 }
