@@ -11,7 +11,7 @@ builder.Services.AddSwaggerGen();
 builder.Services.AddCors(options => options.AddPolicy(name: "FinalAsses",
     policy =>
     {
-        policy.WithOrigins("http://localhost:4200").AllowAnyMethod().AllowAnyHeader();
+        policy.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader();
     }));
 
 var app = builder.Build();
@@ -23,8 +23,9 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-app.UseCors("FinalAsses");
 app.UseHttpsRedirection();
+app.UseCors("FinalAsses");
+
 
 app.UseAuthorization();
 

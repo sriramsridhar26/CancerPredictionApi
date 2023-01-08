@@ -42,10 +42,6 @@ namespace CancerPredictionApi.Controllers
             return Ok("active");
         }
 
-        private void GetSetting(ref string variable)
-        {
-            variable = new ConfigurationBuilder().AddJsonFile("appsettings.json").Build().GetSection("AppSettings")[variable];
-        }
 
         [HttpPost("/UploadVid")]
         [RequestFormLimits(MultipartBodyLengthLimit = 2147483648)]
@@ -82,7 +78,6 @@ namespace CancerPredictionApi.Controllers
             //string filePath = "D:/down/" + filename+".mp4";
             string filePath = _downloadFolder + filename + ".mp4";
 
-            string filePath;
             if(filename == null)
             {
                 return BadRequest();
@@ -144,7 +139,10 @@ namespace CancerPredictionApi.Controllers
                 return BadRequest(response);
             }
         }
-
+        private void GetSetting(ref string variable)
+        {
+            variable = new ConfigurationBuilder().AddJsonFile("appsettings.json").Build().GetSection("AppSettings")[variable];
+        }
         private string stripvid(string input, int starttime, int endtime, string currentdt)
         {
             string outname = "Stripped-" + currentdt ;
