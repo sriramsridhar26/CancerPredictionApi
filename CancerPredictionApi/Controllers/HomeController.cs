@@ -53,7 +53,20 @@ namespace CancerPredictionApi.Controllers
         [HttpGet("/stream")]
         public async Task<IActionResult> stream([FromQuery]string filename)
         {
-            string filePath = "D:/down/" + filename+".mp4";
+            string filePath;
+            if(filename == null)
+            {
+                return BadRequest();
+            }
+            if(filename == "output_video")
+            {
+                filePath = "D:/down/" + filename + ".mp4v";
+            }
+            else
+            {
+                filePath = "D:/down/" + filename + ".mp4";
+            }
+            
             var bytes = await System.IO.File.ReadAllBytesAsync(filePath);
             return File(bytes, "video/mp4", Path.GetFileName(filePath));
         }
@@ -154,7 +167,7 @@ namespace CancerPredictionApi.Controllers
                     using (StreamWriter sw = System.IO.File.CreateText(path)) ;
                     System.IO.File.WriteAllText(path, result);
                     lastline = System.IO.File.ReadLines(path).Last();
-                    Console.WriteLine(lastline);
+                    Console.WriteLine(lastline.Trim());
                 }
             }
             return lastline;
