@@ -82,15 +82,15 @@ namespace CancerPredictionApi.Controllers
             {
                 return BadRequest();
             }
-            if(filename == "output_video")
-            {
-                filePath = "D:/down/" + filename + ".mp4v";
-            }
-            else
-            {
-                filePath = "D:/down/" + filename + ".mp4";
-            }
-            
+            //if(filename == "output_video")
+            //{
+            //    filePath = "D:/down/" + filename + ".mp4v";
+            //}
+            //else
+            //{
+            //    filePath = "D:/down/" + filename + ".mp4";
+            //}
+            filePath = "D:/down/" + filename + ".mp4";
             var bytes = await System.IO.File.ReadAllBytesAsync(filePath);
             return File(bytes, "video/mp4", Path.GetFileName(filePath));
         }
