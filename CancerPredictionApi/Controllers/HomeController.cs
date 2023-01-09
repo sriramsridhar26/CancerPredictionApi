@@ -82,26 +82,10 @@ namespace CancerPredictionApi.Controllers
             {
                 return BadRequest();
             }
-            //if(filename == "output_video")
-            //{
-            //    filePath = "D:/down/" + filename + ".mp4v";
-            //}
-            //else
-            //{
-            //    filePath = "D:/down/" + filename + ".mp4";
-            //}
             filePath = "D:/down/" + filename + ".mp4";
             var bytes = await System.IO.File.ReadAllBytesAsync(filePath);
             return File(bytes, "video/mp4", Path.GetFileName(filePath));
         }
-
-        //[HttpGet("/dummy")]
-        //public async Task<IActionResult> dummy()
-        //{
-        //    string str = detect_cancer(12, 15, 25, 55, @"C:\Users\Gideon\Downloads\TEMP.mp4");
-        //    return Ok(str);
-        //    //return Ok();
-        //}
 
         [HttpPost("/predict")]
         public async Task<IActionResult> predict([FromBody] Param param)
