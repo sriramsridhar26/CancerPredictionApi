@@ -11,10 +11,12 @@ using MediaToolkit;
 using MediaToolkit.Options;
 using static MediaToolkit.Model.Metadata;
 using Microsoft.Extensions.Configuration;
+using Microsoft.AspNetCore.Authorization;
 
 namespace CancerPredictionApi.Controllers
 {
     [ApiController]
+    [Authorize]
     [Route("api/[controller]")]
     public class HomeController : Controller
     {
