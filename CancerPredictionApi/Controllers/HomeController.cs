@@ -6,17 +6,15 @@ using System.Reflection.PortableExecutable;
 using System;
 using System.IO;
 using System.Text;
-using MediaToolkit.Model;
-using MediaToolkit;
-using MediaToolkit.Options;
-using static MediaToolkit.Model.Metadata;
 using Microsoft.Extensions.Configuration;
 using Microsoft.AspNetCore.Authorization;
+using System.Runtime.InteropServices;
+using Python.Runtime;
 
 namespace CancerPredictionApi.Controllers
 {
     [ApiController]
-    [Authorize]
+    //[Authorize]
     [Route("api/[controller]")]
     public class HomeController : Controller
     {
@@ -27,8 +25,16 @@ namespace CancerPredictionApi.Controllers
         private string _condaLoc = "condaLoc";
         private string _pythonExeLoc = "pythonExeLoc";
         private string _pythonLogsLoc = "pythonLogsLoc";
+        private readonly ILogger<HomeController> _logger;
 
-        public HomeController()
+        //public const string RhdColorTransf = @"D:\App\x64\Debug\ReinhardColorTransfer.dll";
+
+        //[DllImport(RhdColorTransf, CallingConvention = CallingConvention.Cdecl)]
+        //public static extern IntPtr status(string str);
+
+        //[DllImport(RhdColorTransf, CallingConvention = CallingConvention.Cdecl)]
+        //public static extern int transfercolor(string targetname, string sourcename, string outname);
+        public HomeController(ILogger<HomeController> logger)
         {
             GetSetting(ref _rawFileAddress);
             GetSetting(ref _downloadFolder);
@@ -36,12 +42,13 @@ namespace CancerPredictionApi.Controllers
             GetSetting(ref _condaLoc);
             GetSetting(ref _pythonExeLoc);
             GetSetting(ref _pythonLogsLoc);
+            _logger = logger;
         }
 
         [HttpGet("/status")]
         public async Task<IActionResult> status()
         {
-            return Ok("active");
+            return Ok("Henlo");
         }
 
 
@@ -55,7 +62,10 @@ namespace CancerPredictionApi.Controllers
             {
                 await data.CopyToAsync(stream);
             }
-            string outname= stripvid(filePath, starttime, endtime, currentdt);
+            string outname= stripvid(filePath,
+                                     TimeSpan.FromSeconds(starttime).ToString(@"hh\:mm\:ss"),
+                                     TimeSpan.FromSeconds(endtime).ToString(@"hh\:mm\:ss"),
+                                     currentdt);
             ServiceResponse<string> response = new ServiceResponse<string>();
             response.Success = true;
             response.Message = "success";
@@ -83,30 +93,58 @@ namespace CancerPredictionApi.Controllers
         [HttpPost("/predict")]
         public async Task<IActionResult> predict([FromBody] Param param)
         {
-            ServiceResponse<string> response = new ServiceResponse<string>();
+            //string[] locations = new string[2];
+            prdreturn response = new prdreturn();
             response.Success = false;
             response.Message = "Issue in backend";
-            response.Data = null;
+            response.output = null;
+            response.workdir = null;
+            _logger.LogInformation(param.before, "before");
+            _logger.LogInformation(param.now, "now");
+            _logger.LogInformation(param.fileName, "filename");
+            _logger.LogInformation(param.iniw.ToString(), "iniw");
+            _logger.LogInformation(param.gain.ToString(), "gain");
 
             if (param != null)
             {
                 try
                 {
-                    string outpath=detect_cancer(param);
-                    if (outpath is null)
+                    string outfile=detect_cancer(param);
+                    var allText = System.IO.File.ReadAllLines(outfile);
+                    var lastLines = allText.Skip(allText.Length - 2);
+                    var lastline = lastLines.LastOrDefault();
+                    try
                     {
+                        response.output = lastLines.LastOrDefault().ToString();
+                        response.workdir = lastLines.FirstOrDefault().ToString();
+                        //response.Data.output=allText.Skip(allText.Length-1).ToString().Trim();
+                        //response.Data.workdir = allText.Skip(allText.Length - 2).ToString().Trim();
+                        if(response.output==response.workdir)
+                        {
+                            response.output = null;
+                            response.workdir = null;
+                            return BadRequest(response);
+                        }
+                    }
+                    catch(Exception ex)
+                    {
+                        response.output = ex.ToString();
                         return BadRequest(response);
                     }
+
+                    //if (outpath is null)
+                    //{
+                    //    return BadRequest(response);
+                    //}
                     response.Success = true;
                     response.Message = "success";
-                    response.Data = outpath;
                     return Ok(response);
                 }
                 catch (Exception ex)
                 {
                     Console.WriteLine(ex.ToString());
 
-                    response.Data = ex.ToString();
+                    response.output = ex.Message;
                     return BadRequest(response);
                 }
             }
@@ -122,25 +160,26 @@ namespace CancerPredictionApi.Controllers
         {
             variable = new ConfigurationBuilder().AddJsonFile("appsettings.json").Build().GetSection("AppSettings")[variable];
         }
-        private string stripvid(string input, int starttime, int endtime, string currentdt)
+        private string stripvid(string input, string starttime, string endtime, string currentdt)
         {
             string outname = "Stripped-" + currentdt ;
-            string path = _downloadFolder;
-            string outpath = path + outname + ".mp4";
-            var inputfile =  new MediaFile { Filename = input };
-            var outputfile = new MediaFile { Filename = outpath };
+            string outpath = _downloadFolder + outname + ".mp4";
             try
             {
-                using (var engine = new Engine(_ffmpegLocation))
+                ProcessStartInfo start = new ProcessStartInfo();
+                start.UseShellExecute = false;
+                start.RedirectStandardOutput = true;
+                start.FileName = _ffmpegLocation;
+                start.Arguments = "-i " + input + " -ss " + starttime + " -t " + endtime + " -async 1 " + outpath;
+                _logger.LogInformation(start.Arguments);
+                using (System.Diagnostics.Process process = System.Diagnostics.Process.Start(start))
                 {
-                    engine.GetMetadata(inputfile);
-                    var options = new ConversionOptions();
-
-                    options.CutMedia(TimeSpan.FromSeconds(starttime), TimeSpan.FromSeconds(endtime - starttime + 1));
-                    engine.Convert(inputfile, outputfile, options);
-                    return outname;
-
+                    using (StreamReader reader = process.StandardOutput)
+                    {
+                        string result = reader.ReadToEnd();
+                    }
                 }
+                        return outname;
             }
             catch (Exception ex)
             {
@@ -149,31 +188,113 @@ namespace CancerPredictionApi.Controllers
             }
            
         }
+        //private string preprocess(string vidloc)
+        //{
+
+        //    //Importing python
+        //    //Runtime.PythonDLL = "D:/conda/python39.dll";
+        //    string envPythonHome = "D:/conda/python39.dll";
+
+        //    Environment.SetEnvironmentVariable("PYTHONNET_PYDLL", envPythonHome, EnvironmentVariableTarget.Process);
+
+        //    string pathToVirtualEnv = "D:/conda";
+        //    string additional = $"{pathToVirtualEnv};{pathToVirtualEnv}\\Lib\\site-packages;{pathToVirtualEnv}\\Lib;{pathToVirtualEnv}\\DLLs";
+        //    PythonEngine.PythonPath = PythonEngine.PythonPath + ";" + additional;
+        //    PythonEngine.Initialize();
+        //    PythonEngine.BeginAllowThreads();
+        //    PythonEngine.ImportModule()
+
+        //    using (Py.GIL())
+        //    {
+        //        //var testModule = Py.Import("testModule");
+        //        //dynamic dircontrol = Py.Import("dircontrol");
+        //        //string workdir = dircontrol.createworkdir();
+        //        //return workdir;
+
+        //        //using (var scope = Py.CreateScope())
+        //        //{
+        //        //    scope.Exec(File.ReadAllText("./dircontrol.py"));
+        //        //}
+        //        //dynamic np = Py.Import("numpy");
+        //        //return (np.cos(np.pi * 2)).ToString();
+        //        //st.ToString();
+
+
+        //        dynamic test = Py.Import("dircontrol");
+        //        dynamic r1 = test.createworkdir();
+        //        return r1.ToString();
+        //    }
+        //}
+
         private string detect_cancer(Param param)
         {
+            
             string lastline;
-            string location = _downloadFolder + param.fileName + ".mp4";
+            string vidloc = _downloadFolder + param.fileName + ".mp4";
+            string path;
             ProcessStartInfo start = new ProcessStartInfo();
             start.FileName = _condaLoc ;
-            start.Arguments = _pythonExeLoc + location + " " + param.rsme + " " + param.iniw + " " + param.finalw + " " + param.gain;
+            if (param.workdir == "null" || param.workdir == null)
+            {
+                start.Arguments = _pythonExeLoc + param.before + " " + param.now + " " + "null" + " " + vidloc + " " + param.rsme + " " + param.iniw + " " + param.finalw + " " + param.gain;
+            }
+            else
+            {
+                start.Arguments = _pythonExeLoc + param.before + " " + param.now + " " + param.workdir + " " + vidloc + " " + param.rsme + " " + param.iniw + " " + param.finalw + " " + param.gain;
+            }
+            //start.Arguments = _pythonExeLoc + param.before + " "+param.now + " "+ param.workdir+" "+vidloc + " " + param.rsme + " " + param.iniw + " " + param.finalw + " " + param.gain;
             start.UseShellExecute = false;
             start.RedirectStandardOutput = true;
+            _logger.LogInformation(start.Arguments, "Argument passed");
             using (System.Diagnostics.Process process = System.Diagnostics.Process.Start(start))
             {
                 using (StreamReader reader = process.StandardOutput)
                 {
                     string result = reader.ReadToEnd();
                     Console.WriteLine(result);
-                    string path = _pythonLogsLoc + DateTime.Now.ToString("ddMMyyyyhhmmss") + ".txt";
+                    path = _pythonLogsLoc + DateTime.Now.ToString("ddMMyyyyhhmmss") + ".txt";
                     using (StreamWriter sw = System.IO.File.CreateText(path)) ;
                     System.IO.File.WriteAllText(path, result);
-                    lastline = System.IO.File.ReadLines(path).Last();
-                    Console.WriteLine(lastline.Trim());
                 }
             }
-            return lastline;
+
+            return path;
         }
 
+
+        //private string colorconversion(string path)
+        //{
+        //    string colorpath = path + "/colorconversion";
+        //    Directory.CreateDirectory(colorpath);
+        //    DirectoryInfo d = new DirectoryInfo(path);
+        //    FileInfo[] files = d.GetFiles("*.png");
+        //    //Array.Sort(files, 
+        //    foreach(FileInfo file in files)
+        //    {
+        //        transfercolor(path+ "/" + file.Name, "D:/App/1_ml_resize_x6_ml_resize.jpg", colorpath+"/"+file.Name);
+        //    }
+        //    return colorpath;
+        //}
+        //private string converttovid(string path)
+        //{
+        //    ProcessStartInfo start = new ProcessStartInfo();
+        //    start.FileName = "D:/ffmpeg/bin/ffmpeg.exe";
+        //    start.WindowStyle = ProcessWindowStyle.Hidden;
+        //    //start.Arguments = "-i " + filename + " " + dir + "/%04d.jpg";
+        //    start.UseShellExecute = false;
+        //    start.RedirectStandardOutput = true;
+        //    string vidpath = "D:\\App\\super_resolution\\movie.mp4";
+        //    start.Arguments = "-f image2 -r 30 -i "+path+"/%d.png -vcodec mpeg4 -y "+vidpath;
+        //    using (System.Diagnostics.Process process = System.Diagnostics.Process.Start(start))
+        //    {
+        //        using (StreamReader reader = process.StandardOutput)
+        //        {
+        //            string result = reader.ReadToEnd();
+        //            Console.WriteLine(result);
+        //        }
+        //    }
+        //    return vidpath;
+        //}
 
        
 
